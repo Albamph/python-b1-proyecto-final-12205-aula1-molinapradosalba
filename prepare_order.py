@@ -102,10 +102,176 @@ f.	Agregar productos: Utilizar la instancia la clase 'Order', del paso c y llama
 
 """
 #Write your code here
-from users import *
+from users import Cashier, Customer
+from products import Product, Hamburger, Soda, Drink, HappyMeal
+from util import (CSVFileManager, CashierConverter, CustomerConverter,
+                  ProductConverter)
+from orders import Order
 
     
 class PrepareOrder:
- #Write your code here
- pass
+    """Classe que fa de "taulell" del caixer: llegeix les dades i
+    permet preparar una comanda pas a pas."""
 
+    def __init__(self, data_path: str = "data/"):
+        # Els CSV són tots a la carpeta data/
+        self.data_path = data_path
+        # De moment les llistes estan buides; les omplirem a load_data()
+        self.cashiers = []
+        self.customers = []
+        self.products = []
+
+    # --- Pas 1 i 2: llegir els CSV i passar-los a objectes ---
+
+    def load_data(self):
+        """Llegeix els CSV i guarda els caixers, clients i productes."""
+        # Primer els caixers: llegim el CSV i el convertim en objectes Cashier
+        df_cashiers = CSVFileManager(self.data_path + "cashiers.csv").read()
+        cashier_converter = CashierConverter()
+        self.cashiers = cashier_converter.convert(df_cashiers)
+        print("\nLlista de caixers:")
+        cashier_converter.print(self.cashiers)
+
+        # Després els clients, igual que amb els caixers
+        df_customers = CSVFileManager(self.data_path + "customers.csv").read()
+        customer_converter = CustomerConverter()
+        self.customers = customer_converter.convert(df_customers)
+        print("\nLlista de clients:")
+        customer_converter.print(self.customers)
+
+        # Els productes estan repartits en 4 fitxers. En comptes de repetir
+        # el mateix codi 4 vegades, faig una llista amb cada fitxer i la
+        # classe que li toca, i ho recorro amb un for.
+        product_files = [
+            ("hamburgers.csv", Hamburger),
+            ("sodas.csv", Soda),
+            ("drinks.csv", Drink),
+            ("happyMeal.csv", HappyMeal),
+        ]
+        product_converter = ProductConverter()
+        self.products = []
+        for file_name, product_class in product_files:
+            df_products = CSVFileManager(self.data_path + file_name).read()
+            self.products += product_converter.convert(df_products,
+                                                       product_class)
+
+    # --- Funcions per buscar ---
+    # Totes fan el mateix: recorren la llista i, si troben el que busquem,
+    # el retornen. Si no el troben, retornen None.
+
+    def find_cashier(self, dni: str) -> Cashier:
+        """Busca un caixer pel DNI."""
+        for cashier in self.cashiers:
+            if cashier.dni == dni:
+                return cashier
+        return None
+
+    def find_customer(self, dni: str) -> Customer:
+        """Busca un client pel DNI."""
+        for customer in self.customers:
+            if customer.dni == dni:
+                return customer
+        return None
+
+    def find_product(self, product_id: str) -> Product:
+        """Busca un producte pel seu identificador (H1, G1...)."""
+        for product in self.products:
+            if product.id == product_id:
+                return product
+        return None
+
+    # --- Pas 3: preparar la comanda ---
+
+    def ask_cashier(self) -> Cashier:
+        """Pas 3a: demana el DNI del caixer.
+
+        Si el DNI no existeix, el torna a demanar (per això el while True).
+        """
+        while True:
+            dni = input("Introdueix DNI del caixer: ").strip()
+            cashier = self.find_cashier(dni)
+            if cashier is not None:
+                print(cashier.describe())
+                return cashier
+            print("No existeix cap caixer amb aquest DNI. Torna-ho a provar.")
+
+    def ask_customer(self) -> Customer:
+        """Pas 3b: el mateix que amb el caixer, però amb el client."""
+        while True:
+            dni = input("Introdueix DNI del client: ").strip()
+            customer = self.find_customer(dni)
+            if customer is not None:
+                print(customer.describe())
+                return customer
+            print("No existeix cap client amb aquest DNI. Torna-ho a provar.")
+
+    def show_products(self):
+        """Pas 3d: ensenya la carta, és a dir, tots els productes."""
+        print("\nLlista de productes:")
+        for product in self.products:
+            print(product.describe())
+
+    def choose_products(self, order: Order):
+        """Passos 3e i 3f: anem demanant productes i els afegim a la comanda
+        fins que l'usuari digui que ja no en vol més."""
+        while True:
+            # Passo l'id a majúscules perquè "g1" també funcioni
+            product_id = input(
+                "Introdueix l'identificador del producte: ").strip().upper()
+            product = self.find_product(product_id)
+            if product is not None:
+                print(product.describe())
+                order.add(product)
+            else:
+                print("No existeix cap producte amb aquest identificador.")
+            # Si la resposta no és "s" o "sí", sortim del bucle
+            answer = input("Vols afegir un altre producte? (s/n): ")
+            if answer.strip().lower() not in ("s", "si", "sí"):
+                break
+
+    def create_order(self):
+        """Fa tota la comanda de cap a peus: caixer, client, productes
+        i, al final, la mostra amb el total."""
+        cashier = self.ask_cashier()
+        customer = self.ask_customer()
+        # Pas 3c: creem la comanda, que de moment no té cap producte
+        order = Order(cashier, customer)
+        self.show_products()
+        self.choose_products(order)
+        # Pas 4: ja la tenim, la mostrem
+        print()
+        order.show()
+
+    # --- Menú d'opcions ---
+
+    def run(self):
+        """Carrega les dades i mostra el menú. Es repeteix fins que
+        l'usuari tria 0 per sortir."""
+        self.load_data()
+        while True:
+            print("\n===== MENJAR RÀPID =====")
+            print("1. Buscar caixer")
+            print("2. Buscar client")
+            print("3. Veure productes")
+            print("4. Crear una comanda")
+            print("0. Sortir")
+            option = input("Tria una opció: ").strip()
+            if option == "1":
+                self.ask_cashier()
+            elif option == "2":
+                self.ask_customer()
+            elif option == "3":
+                self.show_products()
+            elif option == "4":
+                self.create_order()
+            elif option == "0":
+                print("Fins aviat!")
+                break
+            else:
+                print("Opció no vàlida.")
+
+
+# Això fa que el programa només s'engegui si executem aquest fitxer
+# directament (python prepare_order.py) i no quan s'importa.
+if __name__ == "__main__":
+    PrepareOrder().run()
